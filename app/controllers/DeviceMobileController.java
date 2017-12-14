@@ -3,6 +3,9 @@ package controllers;
 import java.util.concurrent.CompletionStage;
 
 import javax.inject.Inject;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
 import play.libs.concurrent.HttpExecutionContext;
 import play.mvc.Controller;
 import play.mvc.Result;
@@ -28,16 +31,16 @@ public class DeviceMobileController extends Controller{
 	        }, httpExecutionContext.current());
 	    }
 	    
-	    public CompletionStage<Result> registeruserTest(String username,String password)
+	    public CompletionStage<Result> registeruserTest()
 	    {
-	        System.out.println(username);
+	    	JsonNode json = request().body().asJson();
+	    	String name = json.findPath("name").textValue();
+	    	System.out.println(name);
+	    	String password = json.findPath("password").textValue();
+	    	System.out.println(name);
 	    	System.out.println(password);
-	    	//Request request;
-	    	//System.out.println(json.toString());
-	        return userRepository.insert(username,password).thenApplyAsync(data -> {
-	            // This is the HTTP rendering thread context
+	        return userRepository.insert(name,password).thenApplyAsync(data -> {
 	        	return ok("ok");
 	        }, httpExecutionContext.current());
-	    	//return null;
 	    }
 }

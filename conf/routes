@@ -14,7 +14,7 @@ POST    /computers                  controllers.HomeController.save()
 
 #register user
 GET     /register                  controllers.DeviceMobileController.register(username:String,password:String)
-POST    /registeruserTest          controllers.DeviceMobileController.registeruserTest(username:String,password:String)
+POST    /registeruserTest          controllers.DeviceMobileController.registeruserTest()
 
 # Edit existing computer
 GET     /computers/:id              controllers.HomeController.edit(id:Long)
