@@ -92,11 +92,6 @@ public class ComputerRepository {
     }
 
     public CompletionStage<Long> insert(Computer computer) {
-//    	User user = new User();
-//    	user.id = System.currentTimeMillis();
-//    	user.username = "test";
-//    	user.password ="123";
-//    	ebeanServer.insert(user);
         return supplyAsync(() -> {
              computer.id = System.currentTimeMillis(); // not ideal, but it works
              ebeanServer.insert(computer);

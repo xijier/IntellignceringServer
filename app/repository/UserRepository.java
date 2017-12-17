@@ -3,12 +3,15 @@ package repository;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import models.User;
 import javax.inject.Inject;
 
+import controllers.Base64_;
 import io.ebean.Ebean;
 import io.ebean.EbeanServer;
+import io.ebean.Transaction;
 import models.Company;
 import models.Computer;
 import play.db.ebean.EbeanConfig;
@@ -44,5 +47,26 @@ public class UserRepository {
 	             ebeanServer.insert(user);
 	             return user.id;
 	        }, executionContext);
+	    }
+	    
+	    public CompletionStage<Optional<Boolean>> validUserPassword(String username,String password) {
+	    	 return supplyAsync(() -> {
+	             Transaction txn = ebeanServer.beginTransaction();
+	             Optional<Boolean> value = Optional.empty();
+	             try {
+	            	 //String decode = Base64_.base64decode(password);
+	                 User user = ebeanServer.find(User.class).where().eq("username", username).eq("password", password).findUnique();
+	                 if (user != null) {
+	                     value = Optional.of(true);
+	                 }
+	                 else
+	                 {
+	                	 value = Optional.of(false);
+	                 }
+	             } finally {
+	                 txn.end();
+	             }
+	             return value;
+	         }, executionContext);
 	    }
 }

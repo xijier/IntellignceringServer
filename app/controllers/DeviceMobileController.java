@@ -36,11 +36,34 @@ public class DeviceMobileController extends Controller{
 	    	JsonNode json = request().body().asJson();
 	    	String name = json.findPath("name").textValue();
 	    	System.out.println(name);
-	    	String password = json.findPath("password").textValue();
+	    	String passwordEn = json.findPath("password").textValue();
 	    	System.out.println(name);
-	    	System.out.println(password);
-	        return userRepository.insert(name,password).thenApplyAsync(data -> {
+	    	System.out.println(passwordEn);
+	    	//String str2 = Base64_.base64decode(passwordEn);
+	    	//System.out.println(str2);
+	        return userRepository.insert(name,passwordEn).thenApplyAsync(data -> {
 	        	return ok("ok");
+	        }, httpExecutionContext.current());
+	    }
+	    
+	    public CompletionStage<Result> mobilelogin()
+	    {
+	    	JsonNode json = request().body().asJson();
+	    	String name = json.findPath("name").textValue();
+	    	String passwordEn = json.findPath("password").textValue();
+	    	//System.out.println(name);
+	    	//System.out.println(passwordEn);
+	    	//String decode = Base64_.base64decode(passwordEn);
+	    	//System.out.println("de code: "+str2);
+	    	return userRepository.validUserPassword(name,passwordEn).thenApplyAsync(data -> {
+	    		if(data.get())
+	    		{
+	    			return ok("ok");
+	    		}
+	    		else
+	    		{
+	    			return ok("wrong");
+	    		}
 	        }, httpExecutionContext.current());
 	    }
 }
