@@ -13,10 +13,10 @@ GET     /computers/new              controllers.HomeController.create()
 POST    /computers                  controllers.HomeController.save()
 
 #register user
-GET     /register                  controllers.DeviceMobileController.register(username:String,password:String)
-POST    /registeruserTest          controllers.DeviceMobileController.registeruserTest()
+POST    /registeruser              controllers.DeviceMobileController.registeruser()
 POST    /mobilelogin               controllers.DeviceMobileController.mobilelogin()
-
+POST    /mobilecode                controllers.DeviceMobileController.mobilecode()
+POST    /mobileresetpassword       controllers.DeviceMobileController.resetpassword()
 # Edit existing computer
 GET     /computers/:id              controllers.HomeController.edit(id:Long)
 POST    /computers/:id              controllers.HomeController.update(id:Long)
