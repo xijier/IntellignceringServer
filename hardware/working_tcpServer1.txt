@@ -1,0 +1,121 @@
+#include <ESP8266WiFi.h>
+#define MAX_SRV_CLIENTS 1   //最大同时联接数，即你想要接入的设备数量，8266tcpserver只能接入五个，哎
+ 
+const char *ssid = "xijier"; ////这里是我的wifi，你使用时修改为你要连接的wifi ssid
+const char *password = "Huawei12#$"; //你要连接的wifi密码
+ 
+WiFiServer server(8266);//你要的端口号，随意修改，范围0-65535
+WiFiClient serverClients[MAX_SRV_CLIENTS];
+
+IPAddress ip;
+int ind = 0;
+char data[150];
+void setup()
+{
+    
+    Serial.begin(115200);
+    delay(10);
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
+    WiFi.begin(ssid, password);
+ 
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(500);
+    }
+    Serial.println(WiFi.localIP());
+    ip = WiFi.softAPIP();
+    server.begin();
+    server.setNoDelay(true);  //加上后才正常些
+}
+ 
+void loop()
+{
+   // blink();
+    delay(500);
+    //Serial.println(WiFi.localIP());
+    //Serial.println("start loop");
+    Serial.println(ip);
+    uint8_t i;
+    if (server.hasClient())
+    {
+        for (i = 0; i < MAX_SRV_CLIENTS; i++)
+        {
+            if (!serverClients[i] || !serverClients[i].connected())
+            {
+                if (serverClients[i]) serverClients[i].stop();//未联接,就释放
+                serverClients[i] = server.available();//分配新的
+                Serial.println(serverClients[i].read());
+                Serial.println("session 1");
+                continue;
+            }
+        }
+        WiFiClient serverClient = server.available();
+        serverClient.stop();
+    }
+    for (i = 0; i < MAX_SRV_CLIENTS; i++)
+    {
+        if (serverClients[i] && serverClients[i].connected())
+        {
+            //digitalWrite(16, 0);//有链接存在,就一直长亮
+            if (serverClients[i].available())
+            {
+                 Serial.println("Connected to client !!! ");  
+                 WiFiClient client = serverClients[i];
+                
+                 while (serverClients[i].available()) {  
+                    data[ind] = serverClients[i].read(); //读取client端发送的字符  
+                    ind++;     
+                }  
+                for(int j=0;j < ind; j++)  
+                {  
+                  Serial.print(data[j]);  
+                }  
+                Serial.println("session 2");
+                String datas= data;
+                Serial.println(datas);
+                if (datas  == "off") {
+                  Serial.println("turn off");
+                  digitalWrite(LED_BUILTIN, HIGH);
+                }
+                if (datas == "on"){
+                  Serial.println("turn on");
+                  digitalWrite(LED_BUILTIN, LOW);
+                  }
+                  memset(data,0,sizeof(data));
+                  ind = 0;
+            }
+        }
+    }
+    
+    if (Serial.available())
+    {
+        size_t len = Serial.available();
+        uint8_t sbuf[len];
+        Serial.readBytes(sbuf, len);
+        //push UART data to all connected telnet clients
+        for (i = 0; i < MAX_SRV_CLIENTS; i++)
+        {
+            if (serverClients[i] && serverClients[i].connected())
+            {
+                serverClients[i].write(sbuf, len);  //向所有客户端发送数据
+                delay(100);
+                
+            }
+        }
+    }
+}
+ 
+ 
+void blink()
+{
+    static long previousMillis = 0;
+    static int currstate = 0;
+ 
+    if (millis() - previousMillis > 200)  //200ms
+    {
+        previousMillis = millis();
+        currstate = 1 - currstate;
+        digitalWrite(16, currstate);
+    }
+}

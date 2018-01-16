@@ -1,0 +1,75 @@
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+
+const char* ssid = "xijier";
+const char* pass = "Huawei12#$";
+const char* host = "192.168.0.103";
+const int tcpPort = 8266;
+
+void setup() {
+  Serial.begin(115200);
+  delay(10);
+
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, pass);  //这里连接wifi
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+  delay(5000);
+  Serial.print("connecting to ");
+  Serial.println(host);
+
+  WiFiClient client;
+  if (!client.connect(host, tcpPort)) {   // 这里连接服务器
+    Serial.println("connection failed");
+    return;
+  }
+
+ //String cmd = iotbombName + " " + iotbombPassword  + " " + iotbombCmd + " ";
+
+  //Serial.print("Requesting URL: ");
+  //Serial.println(cmd);
+
+ // client.print(cmd);   // 这一行是发送命令到服务器
+
+  // 这里设置超时，超过30秒不返回，就重试
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 30000) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+
+  while (client.available()) { //数据返回了。
+    String data = client.readStringUntil('\0');  // 把数据都读出来
+    Serial.println(data);
+    Serial.print("time:");
+    Serial.println(millis() - timeout);
+    if (data  == "off")
+    {
+      Serial.println("turn off");
+      digitalWrite(LED_BUILTIN, HIGH);
+    }
+    if (data == "on")
+    {
+      Serial.println("turn on");
+      digitalWrite(LED_BUILTIN, LOW);
+    }
+  }
+  Serial.println("closing connection");
+}

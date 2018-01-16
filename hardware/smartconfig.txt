@@ -1,0 +1,43 @@
+#include <ESP8266WiFi.h>
+#include <WiFiUdp.h>
+
+
+void setup()
+{
+  pinMode(LED_BUILTIN, OUTPUT);
+  int cnt = 0;
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  digitalWrite(LED_BUILTIN, HIGH);
+  while(WiFi.status() !=WL_CONNECTED){
+   delay(500);
+   Serial.print(".");
+   if(cnt++>10)
+   {
+      WiFi.beginSmartConfig();
+      while(1)
+      {
+        delay(1000);
+        if(WiFi.smartConfigDone())
+        { 
+          Serial.println("SmartConfig Success");
+           digitalWrite(LED_BUILTIN, LOW);
+          break;
+       }
+     }  
+   }
+  }
+
+}
+
+void loop() {
+  digitalWrite(LED_BUILTIN, LOW);   // Turn the LED on (Note that LOW is the voltage level
+                                    // but actually the LED is on; this is because 
+                                    // it is acive low on the ESP-01)
+  delay(500);                      // Wait for a second
+  digitalWrite(LED_BUILTIN, HIGH);  // Turn the LED off by making the voltage HIGH
+  delay(500);                      // Wait for two seconds (to demonstrate the active low LED)
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(2000); 
+  digitalWrite(LED_BUILTIN, HIGH);
+}
