@@ -4,8 +4,10 @@ import static java.util.concurrent.CompletableFuture.supplyAsync;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 
@@ -19,12 +21,14 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 
+import play.data.Form;
 import play.libs.concurrent.HttpExecutionContext;
 import play.mvc.Controller;
 import play.mvc.Result;
 import repository.UserRepository;
 import scala.collection.immutable.StreamViewLike.EmptyView;
 import controllers.Base64_;
+import models.Computer;
 import models.User;
 
 public class DeviceMobileController extends Controller {
@@ -56,15 +60,12 @@ public class DeviceMobileController extends Controller {
 		String phone = json.findPath("phoneNumber").textValue();
 		String email = json.findPath("email").textValue();
 		String area = json.findPath("area").textValue();
-		Boolean status= userRepository.checkuserUnique(phone,name);
-		if(status)
-		{
-			return userRepository.insert(name, passwordEn,phone,email,area).thenApplyAsync(data -> {
+		Boolean status = userRepository.checkuserUnique(phone, name);
+		if (status) {
+			return userRepository.insert(name, passwordEn, phone, email, area).thenApplyAsync(data -> {
 				return ok("ok");
 			}, httpExecutionContext.current());
-		}
-		else
-		{
+		} else {
 			return null;
 		}
 	}
@@ -89,24 +90,24 @@ public class DeviceMobileController extends Controller {
 		String passwordEn = json.findPath("password").textValue();
 		String cacheCode = cahceBuilder.getIfPresent(phoneNumber);
 		if (cacheCode == null) {
-			return null;
-			
+			return CompletableFuture.supplyAsync(() -> {
+				return ok("outofdate");
+			});
 		} else {
-			if(code.equals(cacheCode))
-			{
-				userRepository.update(phoneNumber, passwordEn).thenApplyAsync(data -> {
+			if (code.equals(cacheCode)) {
+				return userRepository.update(phoneNumber, passwordEn).thenApplyAsync(data -> {
 					if (data.get()) {
 						return ok("ok");
 					} else {
 						return ok("wrong");
 					}
 				}, httpExecutionContext.current());
-			}
-			else {
-				return null;
+			} else {
+				return CompletableFuture.supplyAsync(() -> {
+					return ok("wrong");
+				});
 			}
 		}
-		return null;
 	}
 
 	public Result mobilecode() {
@@ -115,10 +116,10 @@ public class DeviceMobileController extends Controller {
 		String phoneNumber = json.findPath("phoneNumber").textValue();
 		try {
 			random = new Random();
-			int randNum = random.nextInt(100000);
+			int randNum = (int)(Math.random()*(9999-1000+1))+1000;
 			String code = String.valueOf(randNum);
 			cahceBuilder.put(phoneNumber, code);
-			PhoneMessage.sendSms(phoneNumber, code);
+			// PhoneMessage.sendSms(phoneNumber, code);
 			System.out.println(code);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -126,4 +127,5 @@ public class DeviceMobileController extends Controller {
 
 		return ok("ok");
 	}
+	
 }

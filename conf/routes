@@ -17,6 +17,11 @@ POST    /registeruser              controllers.DeviceMobileController.registerus
 POST    /mobilelogin               controllers.DeviceMobileController.mobilelogin()
 POST    /mobilecode                controllers.DeviceMobileController.mobilecode()
 POST    /mobileresetpassword       controllers.DeviceMobileController.resetpassword()
+
+#device control
+POST    /setespStatus              controllers.RemoteSetDeviceController.setEspStatus()
+GET     /checkEspStatus/:id        controllers.RemoteSetDeviceController.checkEspStatus(id:String)
+
 # Edit existing computer
 GET     /computers/:id              controllers.HomeController.edit(id:Long)
 POST    /computers/:id              controllers.HomeController.update(id:Long)
