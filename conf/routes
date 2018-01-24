@@ -20,7 +20,7 @@ POST    /mobileresetpassword       controllers.DeviceMobileController.resetpassw
 
 #device control
 POST    /setespStatus              controllers.RemoteSetDeviceController.setEspStatus()
-GET     /checkEspStatus/:id        controllers.RemoteSetDeviceController.checkEspStatus(id:String)
+POST     /checkEspStatus           controllers.RemoteSetDeviceController.checkEspStatus()
 
 # Edit existing computer
 GET     /computers/:id              controllers.HomeController.edit(id:Long)

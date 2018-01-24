@@ -9,10 +9,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import javax.inject.Inject;
-
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
+import org.fusesource.mqtt.client.Future;
+import org.fusesource.mqtt.client.Message;
+import org.fusesource.mqtt.client.QoS;
+import org.fusesource.mqtt.client.Topic;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.cache.Cache;
@@ -43,8 +43,7 @@ public class RemoteSetDeviceController extends Controller {
 			});
 
 	@Inject
-	public RemoteSetDeviceController(UserRepository userRepository, HttpExecutionContext httpExecutionContext)
-			throws MqttException {
+	public RemoteSetDeviceController(UserRepository userRepository, HttpExecutionContext httpExecutionContext) {
 		this.mqttService = new MqttService();
 		this.userRepository = userRepository;
 		this.httpExecutionContext = httpExecutionContext;
@@ -52,38 +51,57 @@ public class RemoteSetDeviceController extends Controller {
 	}
 
 	/*
-	 * 手机调用接口,设置esp状态到服务器 id： 设备ID value：设备状态
+	 * 手机调用接口,设置esp状态到服务器 设备ID value：设备状态
 	 */
 	public Result setEspStatus() {
-		System.out.println("Mqtt");
 		JsonNode json = request().body().asJson();
 		String value = json.findPath("value").textValue();
 		String deviceid = json.findPath("deviceid").textValue();
-		try
-		{
-			this.mqttService.message = new MqttMessage();
-			this.mqttService.message.setQos(2);
-			this.mqttService.message.setRetained(true);
-			this.mqttService.message.setPayload(String.valueOf(value).getBytes());
-			this.mqttService.topic = this.mqttService.client.getTopic(deviceid);
-			this.mqttService.publish(this.mqttService.topic, this.mqttService.message);
-			this.mqttService.client.subscribe(deviceid);
-		}
-		catch (Exception e) {
+		try {
+			String message = value;
+			String topicpush = deviceid+"in";
+			mqttService.connection.publish(topicpush, message.getBytes(), QoS.AT_MOST_ONCE, false);
+			System.out.println(
+					"MQTTFutureServer.publish Message " + "Topic Title :" + topicpush + " context :" + message);
+			//性能需要优化
+			String topicsub =  deviceid+"out";
+			Topic[] topic1 = { new Topic(topicsub, QoS.AT_MOST_ONCE) };
+			mqttService.connection.subscribe(topic1);
+			Future<Message> futrueMessage = mqttService.connection.receive();
+			Message messagesub = futrueMessage.await();
+			System.out.println("MQTTFutureClient.Receive Message " + "Topic Title :" + messagesub.getTopic()
+					+ " context :" + new String(messagesub.getPayload()));
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
 		return ok("ok");
 	}
 
-	public CompletionStage<Result> checkEspStatus(String id) throws MqttException {
-		this.mqttService.message = new MqttMessage();
-		this.mqttService.message.setQos(2);
-		this.mqttService.message.setRetained(true);
-		this.mqttService.client.subscribe(id);
-		String value= new String(this.mqttService.message.getPayload());
-		return CompletableFuture.supplyAsync(() -> {
-			return ok(value);
-		});
+	public Result checkEspStatus() {
+		JsonNode json = request().body().asJson();
+		String deviceid = json.findPath("deviceid").textValue();
+		String restult = "";
+		try {
+			String message = "3";
+			String topicpush = deviceid+"in";
+			String topicsub =  deviceid+"out";
+			mqttService.connection.publish(topicpush, message.getBytes(), QoS.AT_MOST_ONCE, false);
+			System.out.println(
+					"MQTTFutureServer.publish Message " + "Topic Title :" + topicpush + " context :" + message);
+			Topic[] topic1 = { new Topic(topicsub, QoS.AT_MOST_ONCE) };
+			mqttService.connection.subscribe(topic1);
+			Future<Message> futrueMessage = mqttService.connection.receive();
+			Message messagesub = futrueMessage.await();
+			System.out.println("MQTTFutureClient.Receive Message " + "Topic Title :" + messagesub.getTopic()
+					+ " context :" + new String(messagesub.getPayload()));
+			return ok(new String(messagesub.getPayload()));
+		} catch (Exception e) {
+			// TODO: handle exception
+		}
+		return ok(restult);
+		// return CompletableFuture.supplyAsync(() -> {
+		// return ok("ok");
+		// });
 	}
 }
