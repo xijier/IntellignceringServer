@@ -25,26 +25,25 @@
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
-#include <user_interface.h>
-#define MAX_SRV_CLIENTS 1   //最大同时联接数，即你想要接入的设备数量，8266tcpserver只能接入五个，哎 
-#define ESP_PARAM_START_SEC 0x3D
-struct server_info {String server_ip;int server_port;} ser_info;
+#include <EEPROM.h>
+
 // Update these with values suitable for your network.
 const char* mqtt_server = "192.168.0.103";
+char *bufin="";
+char *bufout="";
 WiFiServer server(8266);//你要的端口号，随意修改，范围0-65535
-WiFiClient serverClients[MAX_SRV_CLIENTS];
+WiFiClient serverClients;
 int ind = 0;
-char data[150];
 WiFiClient espClient;
 PubSubClient client(espClient);
 long lastMsg = 0;
-char msg[50];
 int value = 0;
-String deviceId="9999";
+String deviceId = "";
 boolean resetflag = false;
-boolean checkstatusflag = false;
+boolean checkstatus = false;
 boolean setIdflag = true;
-
+String clientId;
+int BUFSIZE = 100;
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -59,11 +58,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if ((char)payload[0] == '1') {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
+     checkstatus = true;
   }
   if ((char)payload[0] == '0')
   {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, HIGH);
+     checkstatus = true;
   }
   if ((char)payload[0] == '2')
   {
@@ -73,61 +74,52 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   if ((char)payload[0] == '3')
   {
-    checkstatusflag = true;
-    Serial.println("check status");
-    ++value;
-    Serial.println(value);
-    int val = digitalRead(LED_BUILTIN);
-    String statusstr = "";
-    if (val == 0)
-    {
-      statusstr = "ison";
-    }
-    if (val == 1)
-    {
-      statusstr = "isoff";
-    }
-    Serial.println(statusstr);
-    client.publish(deviceId.c_str(), statusstr.c_str());
+    checkstatus = true;
   }
 }
-String setDeviceId()
+
+void saveDeviceID(const char* id)
 {
-  //system_param_load(ESP_PARAM_START_SEC, 0, &ser_info, sizeof(ser_info));  
-  //os_memcpy(ser_ip, ser_info.esp_tcp_server_ip, os_strlen(ser_info.esp_tcp_server_ip));  
-  //String server_ip = ser_info.server_ip;  
-  server.begin();
-  server.setNoDelay(true);  //加上后才正常些
-  long timestap = micros();
-  String deviceId = WiFi.BSSIDstr() + WiFi.localIP().toString() + timestap;
-  while (setIdflag)
+  size_t i;
+  for (i = 0; i <= strlen(id); i++)
   {
-    delay(500);
-    Serial.println("deviceId setting......");
-    uint8_t i;
-    //tcp 丢包未验证
-    if (server.hasClient())
-    {
-      for (i = 0; i < MAX_SRV_CLIENTS; i++)
-      {
-        if (!serverClients[i] || !serverClients[i].connected())
-        {
-          if (serverClients[i]) serverClients[i].stop();
-          serverClients[i] = server.available();
-          const char * mystr = deviceId.c_str();
-          Serial.println(deviceId.c_str());
-          serverClients[i].write(mystr, deviceId.length());
-          setIdflag = false;
-          continue;
-        }
-      }
-      WiFiClient serverClient = server.available();
-      serverClient.stop();
-    }
+    EEPROM.write(i, (uint8_t) id[i]);
   }
- // ser_info.server_ip = deviceId;
-  //system_param_save_with_protect(ESP_PARAM_START_SEC, &ser_info, sizeof(ser_info));
-  return deviceId;
+  EEPROM.commit();
+}
+
+void createDeviceId()
+{
+  long timestap = micros();
+  String local_ip =  WiFi.localIP().toString();
+  local_ip.replace(".", "");
+  String bssidstr =  WiFi.BSSIDstr();
+  bssidstr.replace(":", "");
+  deviceId = bssidstr + local_ip + timestap;
+}
+
+void writeDeviceId()
+{
+  createDeviceId();
+  saveDeviceID(deviceId.c_str());
+  Serial.println("new id :" + deviceId);
+}
+
+void pushStatusMessage()
+{
+  int val = digitalRead(LED_BUILTIN);
+  String statusstr = "";
+  if (val == 0)
+  {
+    statusstr = "ison";
+  }
+  if (val == 1)
+  {
+    statusstr = "isoff";
+  }
+  Serial.println(statusstr);
+
+  client.publish(bufout, statusstr.c_str());
 }
 
 void reconnect() {
@@ -136,15 +128,18 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
     Serial.println(deviceId.c_str());
-    String clientId = "ESP8266Client-";
+    clientId = "ESP8266Client-";
     clientId += String(random(0xffff), HEX);
     // Attempt to connect
     if (client.connect(deviceId.c_str(), "admin", "password")) {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish(deviceId.c_str(), "hello world");
+
+      Serial.println(bufout);
+      client.publish(bufout, "hello esp");
       // ... and resubscribe
-      client.subscribe(deviceId.c_str());
+
+      client.subscribe(bufin);
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -199,33 +194,130 @@ void smartConfig()
   {
     delay(500);
   }
-  randomSeed(micros());
-  deviceId = setDeviceId();
 }
 
-void setup() {
+void readDeviceId()
+{
+  EEPROM.begin(512);
+  String buffer;
+  for (int i = 0; i < BUFSIZE; i++)
+  {
+    if (char(EEPROM.read(i)) != 0xFF)
+    {
+      buffer += char(EEPROM.read(i));
+    }
+  }
+  deviceId = buffer;
+}
+
+void start()
+{
   pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
   Serial.begin(115200);
+  randomSeed(micros());
+  readDeviceId();
+  deviceId.trim();
   if (!autoConfig()) {
     Serial.println("Start module");
+    EEPROM.begin(512);
     smartConfig();
+    writeDeviceId();
   }
+  const char *expr = deviceId.c_str();
+  bufin = new char[strlen(expr)+1];
+  strcpy(bufin, expr);
+  strcat(bufin, "in");
+
+  bufout = new char[strlen(expr)+1];
+  strcpy(bufout, expr);
+  strcat(bufout, "out");
+  
+  server.begin();
+  delay(100);
   client.setServer(mqtt_server, 61613);
   client.setCallback(callback);
 }
 
+void tcpServer () {
+  delay(200);
+  // Check if a client has connected
+  WiFiClient client = server.available();
+  if (!client) {
+    return;
+  }
+  // Wait until the client sends some data
+  Serial.println("new client");
+  while (!client.available()) {
+    delay(1);
+  }
+  // Read the first line of the request
+  String req = client.readStringUntil('\r');
+  Serial.println(req);
+  client.flush();
+  // Match the request
+  if (req.indexOf("getId") != -1)
+  {
+    Serial.println("tcp start...");
+    client.flush();
+    deviceId.trim();
+    // Send the response to the client
+    client.write(deviceId.c_str(), deviceId.length());
+    Serial.println("send to mobile: " + deviceId);
+  }
+  else {
+    Serial.println("invalid para");
+    client.stop();
+    return;
+  }
+  client.flush();
+  // Prepare the response
+
+  delay(1);
+  Serial.println("Client disonnected");
+}
+
+void setup() {
+  start();
+}
+
 void loop() {
+
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+  String text = Serial.readString();
+  text.trim();
+  if (text == "reset")
+  {
+    ESP.eraseConfig();
+    ESP.restart();
+  }
+  if (text == "addstring")
+  {
+    Serial.println(bufin);
+    Serial.println(bufout);
+  }
+   
+  if (text == "getId")
+  {
+    Serial.println("Loop in :" + deviceId);
+  }
+  if (server.hasClient())
+  {
+    Serial.println("get id by tcp");
+    tcpServer();
+  }
+  if (checkstatus)
+  {
+    pushStatusMessage();
+    checkstatus = false;
+  }
   if (resetflag)
   {
-    smartConfig();
-    Serial.println(deviceId);
     resetflag = false;
-  }
-  else
-  {
-    if (!client.connected()) {
-      reconnect();
-    }
-    client.loop();
+    Serial.print("Start: ");
+    ESP.eraseConfig();
+    ESP.restart();
   }
 }
