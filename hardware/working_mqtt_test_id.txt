@@ -1,27 +1,3 @@
-/*
-  Basic ESP8266 MQTT example
-
-  This sketch demonstrates the capabilities of the pubsub library in combination
-  with the ESP8266 board/library.
-
-  It connects to an MQTT server then:
-  - publishes "hello world" to the topic "outTopic" every two seconds
-  - subscribes to the topic "inTopic", printing out any messages
-    it receives. NB - it assumes the received payloads are strings not binary
-  - If the first character of the topic "inTopic" is an 1, switch ON the ESP Led,
-    else switch it off
-
-  It will reconnect to the server if the connection is lost using a blocking
-  reconnect function. See the 'mqtt_reconnect_nonblocking' example for how to
-  achieve the same result without blocking the main loop.
-
-  To install the ESP8266 board, (using Arduino 1.6.4+):
-  - Add the following 3rd party board manager under "File -> Preferences -> Additional Boards Manager URLs":
-       http://arduino.esp8266.com/stable/package_esp8266com_index.json
-  - Open the "Tools -> Board -> Board Manager" and click install for the ESP8266"
-  - Select your ESP8266 in "Tools -> Board"
-
-*/
 
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
@@ -29,8 +5,8 @@
 
 // Update these with values suitable for your network.
 const char* mqtt_server = "192.168.0.103";
-char *bufin="";
-char *bufout="";
+char *bufin = "";
+char *bufout = "";
 WiFiServer server(8266);//你要的端口号，随意修改，范围0-65535
 WiFiClient serverClients;
 int ind = 0;
@@ -44,6 +20,7 @@ boolean checkstatus = false;
 boolean setIdflag = true;
 String clientId;
 int BUFSIZE = 100;
+//接受4g消息的回调函数
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -58,13 +35,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
   if ((char)payload[0] == '1') {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
-     checkstatus = true;
+    checkstatus = true;
   }
   if ((char)payload[0] == '0')
   {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, HIGH);
-     checkstatus = true;
+    checkstatus = true;
   }
   if ((char)payload[0] == '2')
   {
@@ -77,7 +54,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     checkstatus = true;
   }
 }
-
+//设备id保存到rom中
 void saveDeviceID(const char* id)
 {
   size_t i;
@@ -87,7 +64,7 @@ void saveDeviceID(const char* id)
   }
   EEPROM.commit();
 }
-
+//生成设备id
 void createDeviceId()
 {
   long timestap = micros();
@@ -97,14 +74,14 @@ void createDeviceId()
   bssidstr.replace(":", "");
   deviceId = bssidstr + local_ip + timestap;
 }
-
+//将设备id写入rom
 void writeDeviceId()
 {
   createDeviceId();
   saveDeviceID(deviceId.c_str());
   Serial.println("new id :" + deviceId);
 }
-
+//通过4g发送设备状态消息
 void pushStatusMessage()
 {
   int val = digitalRead(LED_BUILTIN);
@@ -121,10 +98,18 @@ void pushStatusMessage()
 
   client.publish(bufout, statusstr.c_str());
 }
-
-void reconnect() {
+//连接mqtt server，
+boolean reconnect() {
   // Loop until we're reconnected
+  boolean isconnect = true;
+  int i = 0;
   while (!client.connected()) {
+    if (i > 15)
+    {
+      isconnect = false;
+      break; //30 秒内尝试15次没有连接成功则退出
+    }
+    i++;
     Serial.print("Attempting MQTT connection...");
     // Create a random client ID
     Serial.println(deviceId.c_str());
@@ -144,12 +129,14 @@ void reconnect() {
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
-      // Wait 3 seconds before retrying
-      delay(3000);
+      // Wait 2 seconds before retrying
+      delay(2000);
     }
   }
+  return isconnect;
 }
 
+//自动配置连接wifi
 bool autoConfig()
 {
   WiFi.begin();
@@ -176,6 +163,7 @@ bool autoConfig()
   //WiFi.printDiag(Serial);
 }
 
+//配置连接wifi
 void smartConfig()
 {
   WiFi.mode(WIFI_STA);
@@ -195,7 +183,7 @@ void smartConfig()
     delay(500);
   }
 }
-
+//读取rom中设备id
 void readDeviceId()
 {
   EEPROM.begin(512);
@@ -217,6 +205,8 @@ void start()
   randomSeed(micros());
   readDeviceId();
   deviceId.trim();
+  Serial.println(deviceId.c_str());
+  Serial.println("read id");
   if (!autoConfig()) {
     Serial.println("Start module");
     EEPROM.begin(512);
@@ -224,20 +214,20 @@ void start()
     writeDeviceId();
   }
   const char *expr = deviceId.c_str();
-  bufin = new char[strlen(expr)+1];
+  bufin = new char[strlen(expr) + 1];
   strcpy(bufin, expr);
   strcat(bufin, "in");
 
-  bufout = new char[strlen(expr)+1];
+  bufout = new char[strlen(expr) + 1];
   strcpy(bufout, expr);
   strcat(bufout, "out");
-  
+
   server.begin();
   delay(100);
   client.setServer(mqtt_server, 61613);
   client.setCallback(callback);
 }
-
+//无网登陆本地tcp消息
 void tcpServer () {
   delay(200);
   // Check if a client has connected
@@ -247,33 +237,86 @@ void tcpServer () {
   }
   // Wait until the client sends some data
   Serial.println("new client");
+  int i = 0;
+  boolean hasClinet = true;
+  //判断是否有tcp消息，尝试50次，500毫秒
   while (!client.available()) {
-    delay(1);
+    if (i > 50)
+    {
+      hasClinet = false;
+      break;
+    }
+    i++;
+    delay(10);
   }
-  // Read the first line of the request
-  String req = client.readStringUntil('\r');
-  Serial.println(req);
-  client.flush();
-  // Match the request
-  if (req.indexOf("getId") != -1)
+  if (hasClinet)
   {
-    Serial.println("tcp start...");
+    // Read the first line of the request
+    String req = client.readStringUntil('\r');
+    Serial.println(req);
     client.flush();
-    deviceId.trim();
-    // Send the response to the client
-    client.write(deviceId.c_str(), deviceId.length());
-    Serial.println("send to mobile: " + deviceId);
-  }
-  else {
-    Serial.println("invalid para");
-    client.stop();
-    return;
-  }
-  client.flush();
-  // Prepare the response
+    // Match the request
+    if (req.indexOf("ison") != -1)
+    {
+      pinMode(LED_BUILTIN, OUTPUT);
+      digitalWrite(LED_BUILTIN, HIGH);
+      client.write("ison", 4);
+      Serial.println("send to mobile deviceId: ison");
+    }
+    else if (req.indexOf("isoff") != -1)
+    {
+      pinMode(LED_BUILTIN, OUTPUT);
+      digitalWrite(LED_BUILTIN, LOW);
+      client.write("isoff", 5);
+      Serial.println("send to mobile deviceId: isoff");
+    }
+    else if (req.indexOf("smartConfig") != -1)
+    {
+      client.flush();
+      deviceId.trim();
+      // Send the response to the client
+      client.write(deviceId.c_str(), deviceId.length());
+      Serial.println("send to mobile deviceId: " + deviceId);
+    }
+    else if (req.indexOf("checkStatus") != -1)
+    {
+      int val = digitalRead(LED_BUILTIN);
+      String statusstr = "";
+      if (val == 0)
+      {
+        statusstr = "ison";
+      }
+      if (val == 1)
+      {
+        statusstr = "isoff";
+      }
+      Serial.println("tcp start...");
+      client.flush();
+      // Send the response to the client
+      client.write(statusstr.c_str(), statusstr.length());
+      Serial.println("send to mobile: " + statusstr);
+    }
+    else if (req.indexOf("reset") != -1)
+    {
+      client.write("delete", 6);
+      Serial.println("send to mobile: delete ");
+      resetflag = true;
+    }
+    else {
+      Serial.println("invalid para");
+      client.stop();
+      return;
+    }
+    client.flush();
+    // Prepare the response
 
-  delay(1);
-  Serial.println("Client disonnected");
+    delay(1);
+    Serial.println("Client disonnected");
+  }
+  else
+  {
+    Serial.println("tpc Client error");
+  }
 }
 
 void setup() {
@@ -281,43 +324,53 @@ void setup() {
 }
 
 void loop() {
+  //wifi是否连接成功
+  if (WiFi.status() != WL_CONNECTED)
+  {
 
-  if (!client.connected()) {
-    reconnect();
   }
-  client.loop();
-  String text = Serial.readString();
-  text.trim();
-  if (text == "reset")
+  else
   {
-    ESP.eraseConfig();
-    ESP.restart();
-  }
-  if (text == "addstring")
-  {
-    Serial.println(bufin);
-    Serial.println(bufout);
-  }
-   
-  if (text == "getId")
-  {
-    Serial.println("Loop in :" + deviceId);
-  }
-  if (server.hasClient())
-  {
-    Serial.println("get id by tcp");
-    tcpServer();
-  }
-  if (checkstatus)
-  {
-    pushStatusMessage();
-    checkstatus = false;
-  }
-  if (resetflag)
-  {
-    resetflag = false;
-    Serial.print("Start: ");
-    ESP.eraseConfig();
-    ESP.restart();
+    //判断是否可以连接外网尝试30秒,循环后再判断
+    boolean isconnect = true;
+    if (!client.connected()) {
+      isconnect = reconnect();
+    }
+    if (isconnect)
+    {
+      client.loop();
+    }
+    String text = Serial.readString();
+    text.trim();
+    if (text == "reset")
+    {
+      ESP.eraseConfig();
+      ESP.restart();
+    }
+    if (text == "addstring")
+    {
+      Serial.println(bufin);
+      Serial.println(bufout);
+    }
+    //判断是否有本地tcp消息
+    if (server.hasClient())
+    {
+      Serial.println("get id by tcp");
+      tcpServer();
+    }
+    //默认为false，通过4g查看设备状态
+    if (checkstatus)
+    {
+      pushStatusMessage();
+      checkstatus = false;
+    }
+    //重置设备，用于wifi密码重置，设备从控制端删除的操作，需要重新smartconfig配对，id重写
+    if (resetflag)
+    {
+      resetflag = false;
+      Serial.print("Start: ");
+      ESP.eraseConfig();
+      ESP.restart();
+    }
   }
 }
