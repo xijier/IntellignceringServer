@@ -47,7 +47,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   {
     Serial.println("Reset");
     resetflag = true;
-    setIdflag = true;
   }
   if ((char)payload[0] == '3')
   {
@@ -198,35 +197,6 @@ void readDeviceId()
   deviceId = buffer;
 }
 
-void start()
-{
-  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
-  Serial.begin(115200);
-  randomSeed(micros());
-  readDeviceId();
-  deviceId.trim();
-  Serial.println(deviceId.c_str());
-  Serial.println("read id");
-  if (!autoConfig()) {
-    Serial.println("Start module");
-    EEPROM.begin(512);
-    smartConfig();
-    writeDeviceId();
-  }
-  const char *expr = deviceId.c_str();
-  bufin = new char[strlen(expr) + 1];
-  strcpy(bufin, expr);
-  strcat(bufin, "in");
-
-  bufout = new char[strlen(expr) + 1];
-  strcpy(bufout, expr);
-  strcat(bufout, "out");
-
-  server.begin();
-  delay(100);
-  client.setServer(mqtt_server, 61613);
-  client.setCallback(callback);
-}
 //无网登陆本地tcp消息
 void tcpServer () {
   delay(200);
@@ -270,7 +240,7 @@ void tcpServer () {
       client.write("isoff", 5);
       Serial.println("send to mobile deviceId: isoff");
     }
-    else if (req.indexOf("smartConfig") != -1)
+    else if (req.indexOf("esp8266") != -1)
     {
       client.flush();
       deviceId.trim();
@@ -280,20 +250,23 @@ void tcpServer () {
     }
     else if (req.indexOf("checkStatus") != -1)
     {
+      client.flush();
       int val = digitalRead(LED_BUILTIN);
       String statusstr = "";
       if (val == 0)
       {
         statusstr = "ison";
+        client.write("ison", 4);
       }
       if (val == 1)
       {
         statusstr = "isoff";
+        client.write("isoff", 5);
       }
       Serial.println("tcp start...");
-      client.flush();
+
       // Send the response to the client
-      client.write(statusstr.c_str(), statusstr.length());
+
       Serial.println("send to mobile: " + statusstr);
     }
     else if (req.indexOf("reset") != -1)
@@ -317,6 +290,101 @@ void tcpServer () {
   {
     Serial.println("tpc Client error");
   }
+}
+
+void setIdbyTcp() {
+  delay(200);
+  // Check if a client has connected
+  WiFiClient client = server.available();
+  if (!client) {
+    return;
+  }
+  // Wait until the client sends some data
+  Serial.println("new client");
+  int i = 0;
+  boolean hasClinet = true;
+  //判断是否有tcp消息，尝试50次，500毫秒
+  while (!client.available()) {
+    if (i > 50)
+    {
+      hasClinet = false;
+      break;
+    }
+    i++;
+    delay(10);
+  }
+  if (hasClinet)
+  {
+    // Read the first line of the request
+    String req = client.readStringUntil('\r');
+    Serial.println(req);
+    client.flush();
+    if (req.indexOf("esp8266") != -1)
+    {
+      client.flush();
+      req.trim();
+      saveDeviceID(req.c_str());
+      deviceId = req;
+      // Send the response to the client
+      client.write(deviceId.c_str(), deviceId.length());
+      Serial.println("send to mobile deviceId: " + deviceId);
+    }
+    client.flush();
+    // Prepare the response
+    delay(1);
+    Serial.println("Client disonnected");
+  }
+  else
+  {
+    Serial.println("tpc Client error");
+  }
+}
+
+void start()
+{
+  pinMode(LED_BUILTIN, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  Serial.begin(115200);
+  randomSeed(micros());
+  readDeviceId();
+  deviceId.trim();
+  Serial.println(deviceId.c_str());
+  Serial.println("read id");
+  if (!autoConfig()) {
+    Serial.println("Start module");
+    EEPROM.begin(512);
+    smartConfig();
+    //writeDeviceId();
+  }
+
+  server.begin();
+  delay(100);
+  const char *exprlen = deviceId.c_str();
+  if (strlen(exprlen) == 0)
+  {
+    while (server.hasClient() == false)
+    {
+      delay(500);
+      Serial.println("waiting client..");
+    }
+    setIdbyTcp();
+  }
+  else
+  {
+    Serial.println("has deviceId");
+    Serial.println(deviceId.c_str());
+  }
+
+  const char *expr = deviceId.c_str();
+  bufin = new char[strlen(expr) + 1];
+  strcpy(bufin, expr);
+  strcat(bufin, "in");
+
+  bufout = new char[strlen(expr) + 1];
+  strcpy(bufout, expr);
+  strcat(bufout, "out");
+
+  client.setServer(mqtt_server, 61613);
+  client.setCallback(callback);
 }
 
 void setup() {
@@ -364,7 +432,7 @@ void loop() {
       pushStatusMessage();
       checkstatus = false;
     }
-    //重置设备，用于wifi密码重置，设备从控制端删除的操作，需要重新smartconfig配对，id重写
+    //重置设备，用于wifi密码重置，设备从控制端删除的操作，需要重新smartconfig配对
     if (resetflag)
     {
       resetflag = false;
