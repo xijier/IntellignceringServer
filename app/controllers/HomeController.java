@@ -165,5 +165,11 @@ public class HomeController extends Controller {
             return GO_HOME;
         }, httpExecutionContext.current());
     }  
+    
+    public Result controlDevice() {
+       System.out.println("12344");
+    	return ok("ok");
+    }  
+    
 }
             

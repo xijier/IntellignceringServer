@@ -11,6 +11,7 @@ GET     /computers                  controllers.HomeController.list(p:Int ?= 0, 
 # Add computer
 GET     /computers/new              controllers.HomeController.create()
 POST    /computers                  controllers.HomeController.save()
+GET     /computers/controlDevice    controllers.HomeController.controlDevice()
 
 #register user
 POST    /registeruser              controllers.DeviceMobileController.registeruser()
@@ -25,7 +26,7 @@ POST     /checkEspStatus           controllers.RemoteSetDeviceController.checkEs
 # Edit existing computer
 GET     /computers/:id              controllers.HomeController.edit(id:Long)
 POST    /computers/:id              controllers.HomeController.update(id:Long)
-
+ 
 # Delete a computer
 POST    /computers/:id/delete       controllers.HomeController.delete(id:Long)
 
